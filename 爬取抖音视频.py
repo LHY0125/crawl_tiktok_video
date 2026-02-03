@@ -7,7 +7,11 @@ from tkinter import filedialog, messagebox, scrolledtext
 from datetime import datetime
 from DrissionPage import ChromiumPage, ChromiumOptions
 
-# python "D:\Code\doing_exercises\programs\crawl_tiktok_video\爬取抖音视频.py"
+# 运行脚本 (使用 my_env 环境):
+# D:\ProgramData\anaconda3\envs\my_env\python.exe "D:\Code\doing_exercises\programs\crawl_tiktok_video\爬取抖音视频.py"
+#
+# 打包成 exe (使用 my_env 环境):
+# D:\ProgramData\anaconda3\envs\my_env\python.exe -m PyInstaller -F -w --clean --name "DouyinDownloader" 爬取抖音视频.py
 
 # ================= 配置区域 =================
 # 这里写死了 Edge 的路径
@@ -296,6 +300,12 @@ class DouyinDownloaderApp:
 
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = DouyinDownloaderApp(root)
-    root.mainloop()
+    try:
+        root = tk.Tk()
+        app = DouyinDownloaderApp(root)
+        root.mainloop()
+    except Exception as e:
+        import traceback
+
+        with open("error_log.txt", "w") as f:
+            f.write(traceback.format_exc())
