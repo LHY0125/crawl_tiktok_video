@@ -7,8 +7,7 @@ OutputDir=Output
 OutputBaseFilename=DouyinDownloader_Setup
 Compression=lzma
 SolidCompression=yes
-ArchitecturesInstallIn64BitMode=x64
-; SetupIconFile=ico\爬取抖音视频.ico
+ArchitecturesInstallIn64BitMode=x64compatible
 
 [Files]
 ; 包含主 exe
