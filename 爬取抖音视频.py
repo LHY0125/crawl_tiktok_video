@@ -3,6 +3,7 @@ import time
 import requests
 import threading
 import tkinter as tk
+import concurrent.futures
 from tkinter import filedialog, messagebox, scrolledtext
 from datetime import datetime
 from DrissionPage import ChromiumPage, ChromiumOptions
@@ -13,29 +14,74 @@ from DrissionPage import ChromiumPage, ChromiumOptions
 # 打包成 exe (使用 my_env 环境):
 # D:\ProgramData\anaconda3\envs\my_env\python.exe -m PyInstaller -F -w --clean --name "DouyinDownloader" 爬取抖音视频.py
 
-# ================= 配置区域 =================
-# 这里写死了 Edge 的路径
-DEFAULT_BROWSER_PATH = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+
+# ================= 配置区域 / 工具函数 =================
+# [Utils] 自动查找 Edge 浏览器路径，提升用户体验
+def find_edge_path():
+    possible_paths = [
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        os.path.expanduser(r"~\AppData\Local\Microsoft\Edge\Application\msedge.exe"),
+    ]
+    for path in possible_paths:
+        if os.path.exists(path):
+            return path
+    return None
 
 
-# ===========================================
+# ================= 主应用程序类 =================
 
 
 class DouyinDownloaderApp:
     def __init__(self, root):
+        """
+        [UI Layer] 初始化界面
+        负责创建主窗口、设置图标、初始化变量和加载布局
+        """
         self.root = root
         self.root.title("抖音批量下载工具 (GUI版)")
-        self.root.geometry("600x550")
+        self.root.geometry("600x650")
+
+        # 设置窗口图标
+        try:
+            # 尝试多种路径查找图标，兼容源码运行和打包后的情况
+            icon_candidates = [
+                os.path.join(
+                    os.path.dirname(__file__), "ico", "爬取抖音视频.ico"
+                ),  # 源码目录
+                os.path.join(
+                    os.path.dirname(__file__), "爬取抖音视频.ico"
+                ),  # 此时同级目录
+            ]
+            for icon_path in icon_candidates:
+                if os.path.exists(icon_path):
+                    self.root.iconbitmap(icon_path)
+                    break
+        except Exception:
+            pass
 
         # 界面布局变量
         self.url_var = tk.StringVar()
         self.count_var = tk.StringVar(value="10")
         self.save_path_var = tk.StringVar()
+
+        # 浏览器路径初始化
+        default_browser = find_edge_path()
+        if not default_browser:
+            default_browser = (
+                r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+            )
+        self.browser_path_var = tk.StringVar(value=default_browser)
+
         self.is_running = False
 
         self.create_widgets()
 
     def create_widgets(self):
+        """
+        [UI Layer] 构建界面组件
+        使用 Pack 布局管理器按顺序排列各个输入框和按钮
+        """
         # 1. 主页链接
         tk.Label(self.root, text="1. 作者主页链接:").pack(
             anchor="w", padx=10, pady=(10, 0)
@@ -66,7 +112,22 @@ class DouyinDownloaderApp:
         )
         btn_browse.pack(side="right", padx=(5, 0))
 
-        # 4. 开始按钮
+        # 4. 浏览器路径
+        tk.Label(self.root, text="4. 浏览器路径 (Edge):").pack(
+            anchor="w", padx=10, pady=(10, 0)
+        )
+        frame_browser = tk.Frame(self.root)
+        frame_browser.pack(padx=10, pady=5, fill="x")
+
+        entry_browser = tk.Entry(frame_browser, textvariable=self.browser_path_var)
+        entry_browser.pack(side="left", fill="x", expand=True)
+
+        btn_browse_browser = tk.Button(
+            frame_browser, text="选择文件", command=self.select_browser
+        )
+        btn_browse_browser.pack(side="right", padx=(5, 0))
+
+        # 5. 开始按钮
         self.btn_start = tk.Button(
             self.root,
             text="开始下载",
@@ -77,7 +138,7 @@ class DouyinDownloaderApp:
         )
         self.btn_start.pack(pady=15, fill="x", padx=50)
 
-        # 5. 日志输出窗口
+        # 6. 日志输出窗口
         tk.Label(self.root, text="运行日志:").pack(anchor="w", padx=10)
         self.log_text = scrolledtext.ScrolledText(
             self.root, height=15, state="disabled"
@@ -85,7 +146,14 @@ class DouyinDownloaderApp:
         self.log_text.pack(padx=10, pady=5, fill="both", expand=True)
 
     def log(self, message):
-        """向日志窗口输出信息"""
+        """
+        [UI Layer] 线程安全的日志输出
+        子线程不能直接更新UI，必须通过 root.after 调度到主线程执行
+        """
+        self.root.after(0, self._log_impl, message)
+
+    def _log_impl(self, message):
+        """实际执行日志写入的方法"""
         self.log_text.config(state="normal")
         self.log_text.insert(tk.END, message + "\n")
         self.log_text.see(tk.END)  # 滚动到底部
@@ -97,8 +165,20 @@ class DouyinDownloaderApp:
         if folder_selected:
             self.save_path_var.set(folder_selected)
 
+    def select_browser(self):
+        """选择浏览器文件对话框"""
+        file_selected = filedialog.askopenfilename(
+            title="选择 Edge 浏览器可执行文件",
+            filetypes=[("Executable Files", "*.exe"), ("All Files", "*.*")],
+        )
+        if file_selected:
+            self.browser_path_var.set(file_selected)
+
     def start_thread(self):
-        """在独立线程中运行，防止界面卡死"""
+        """
+        [Control Layer] 线程调度
+        校验参数并开启独立线程运行核心任务，防止界面卡死
+        """
         if self.is_running:
             messagebox.showwarning("提示", "任务正在进行中，请稍候...")
             return
@@ -107,6 +187,7 @@ class DouyinDownloaderApp:
         url = self.url_var.get().strip()
         count_str = self.count_var.get().strip()
         save_path = self.save_path_var.get().strip()
+        browser_path = self.browser_path_var.get().strip()
 
         if not url:
             messagebox.showerror("错误", "请输入主页链接")
@@ -119,10 +200,10 @@ class DouyinDownloaderApp:
             return
 
         # 检查浏览器路径是否存在
-        if not os.path.exists(DEFAULT_BROWSER_PATH):
+        if not browser_path or not os.path.exists(browser_path):
             messagebox.showerror(
                 "错误",
-                f"未找到浏览器文件：\n{DEFAULT_BROWSER_PATH}\n\n请确认已安装Edge或修改代码中的路径配置。",
+                f"指定的浏览器路径不存在：\n{browser_path}\n请手动选择正确的 msedge.exe 路径。",
             )
             return
 
@@ -134,13 +215,16 @@ class DouyinDownloaderApp:
 
         # 开启线程
         thread = threading.Thread(
-            target=self.run_task, args=(url, int(count_str), save_path)
+            target=self.run_task, args=(url, int(count_str), save_path, browser_path)
         )
         thread.daemon = True
         thread.start()
 
     def download_file(self, url, filepath):
-        """下载文件逻辑"""
+        """
+        [Data Layer] 文件下载执行器
+        使用 requests 流式下载，包含重试机制
+        """
         try:
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -165,14 +249,68 @@ class DouyinDownloaderApp:
             self.log(f"下载出错: {e}")
             return False
 
-    def run_task(self, target_url, target_count, save_root):
-        """核心业务逻辑"""
+    def process_work(self, work, index, total_count, save_root, file_name_base):
+        """
+        [Data Layer] 单个任务处理逻辑 (Worker)
+        判断作品类型(视频/图文)，生成路径并调用下载器
+        """
+        try:
+            is_video = True
+            if "images" in work and work["images"]:
+                is_video = False
+
+            self.log(
+                f"[{index + 1}/{total_count}] {file_name_base} | {'视频' if is_video else '图文'} | 下载中..."
+            )
+
+            if is_video:
+                video_url = work["video"]["play_addr"]["url_list"][0]
+                file_path = os.path.join(save_root, f"{file_name_base}.mp4")
+                if not os.path.exists(file_path):
+                    if self.download_file(video_url, file_path):
+                        self.log(
+                            f"[{index + 1}/{total_count}] {file_name_base} -> 下载完成"
+                        )
+                    else:
+                        self.log(
+                            f"[{index + 1}/{total_count}] {file_name_base} -> 下载失败"
+                        )
+                else:
+                    self.log(
+                        f"[{index + 1}/{total_count}] {file_name_base} -> 文件已存在，跳过"
+                    )
+            else:
+                img_folder = os.path.join(save_root, file_name_base)
+                if not os.path.exists(img_folder):
+                    os.makedirs(img_folder)
+
+                images = work["images"]
+                for idx, img_obj in enumerate(images):
+                    img_url = img_obj["url_list"][0]
+                    img_name = f"{idx + 1}.png"
+                    img_path = os.path.join(img_folder, img_name)
+                    if not os.path.exists(img_path):
+                        self.download_file(img_url, img_path)
+                self.log(
+                    f"[{index + 1}/{total_count}] {file_name_base} -> 图文下载完成"
+                )
+
+        except Exception as e:
+            self.log(f"[{index + 1}/{total_count}] {file_name_base} -> 处理出错: {e}")
+
+    def run_task(self, target_url, target_count, save_root, browser_path):
+        """
+        [Control Layer] 核心业务流程
+        1. 启动浏览器
+        2. 监听数据包获取作品列表
+        3. 调度线程池并行下载
+        """
         dp = None
         try:
-            self.log(f"正在启动 Edge 浏览器 ({DEFAULT_BROWSER_PATH})...")
+            self.log(f"正在启动 Edge 浏览器 ({browser_path})...")
 
             co = ChromiumOptions()
-            co.set_paths(browser_path=DEFAULT_BROWSER_PATH)
+            co.set_paths(browser_path=browser_path)
 
             # 尝试启动浏览器
             dp = ChromiumPage(addr_or_opts=co)
@@ -228,64 +366,61 @@ class DouyinDownloaderApp:
 
             self.log(f"扫描完成，共获取 {len(collected_works)} 个作品。")
             dp.close()  # 关闭浏览器
+            dp = None  # 置空，避免 finally 重复关闭
 
             # 处理数据
             works_to_process = collected_works[:target_count]
             # 按时间正序
             works_to_process.sort(key=lambda x: x["create_time"])
 
-            self.log("开始下载...")
+            self.log("开始下载 (多线程并行)...")
             date_counter = {}
 
+            # 准备下载任务列表
+            download_tasks = []
+
             for index, work in enumerate(works_to_process):
-                try:
-                    ts = work["create_time"]
-                    date_str = datetime.fromtimestamp(ts).strftime("%Y_%m_%d")
+                ts = work["create_time"]
+                date_str = datetime.fromtimestamp(ts).strftime("%Y_%m_%d")
 
-                    if date_str not in date_counter:
-                        date_counter[date_str] = 1
-                        file_name_base = date_str
-                    else:
-                        date_counter[date_str] += 1
-                        count_idx = date_counter[date_str]
-                        file_name_base = f"{date_str}({count_idx})"
+                if date_str not in date_counter:
+                    date_counter[date_str] = 1
+                    file_name_base = date_str
+                else:
+                    date_counter[date_str] += 1
+                    count_idx = date_counter[date_str]
+                    file_name_base = f"{date_str}({count_idx})"
 
-                    is_video = True
-                    if "images" in work and work["images"]:
-                        is_video = False
+                download_tasks.append(
+                    {"work": work, "index": index, "file_name_base": file_name_base}
+                )
 
-                    self.log(
-                        f"[{index + 1}/{len(works_to_process)}] {file_name_base} | {'视频' if is_video else '图文'}"
+            # 使用线程池执行下载
+            # max_workers=5 表示同时下载5个
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                futures = []
+                for task in download_tasks:
+                    futures.append(
+                        executor.submit(
+                            self.process_work,
+                            task["work"],
+                            task["index"],
+                            len(works_to_process),
+                            save_root,
+                            task["file_name_base"],
+                        )
                     )
 
-                    if is_video:
-                        video_url = work["video"]["play_addr"]["url_list"][0]
-                        file_path = os.path.join(save_root, f"{file_name_base}.mp4")
-                        if not os.path.exists(file_path):
-                            self.download_file(video_url, file_path)
-                        else:
-                            self.log("  -> 文件已存在，跳过")
-                    else:
-                        img_folder = os.path.join(save_root, file_name_base)
-                        if not os.path.exists(img_folder):
-                            os.makedirs(img_folder)
-
-                        images = work["images"]
-                        for idx, img_obj in enumerate(images):
-                            img_url = img_obj["url_list"][0]
-                            img_name = f"{idx + 1}.png"
-                            img_path = os.path.join(img_folder, img_name)
-                            if not os.path.exists(img_path):
-                                self.download_file(img_url, img_path)
-                        self.log("  -> 图文下载完成")
-
-                except Exception as e:
-                    self.log(f"  -> 处理出错: {e}")
-                    continue
+                # 等待所有任务完成
+                concurrent.futures.wait(futures)
 
             self.log("=" * 30)
             self.log("全部任务结束！")
-            messagebox.showinfo("完成", "全部下载任务已结束！")
+
+            # 必须在主线程显示弹窗
+            self.root.after(
+                0, lambda: messagebox.showinfo("完成", "全部下载任务已结束！")
+            )
 
         except Exception as e:
             self.log(f"发生严重错误: {e}")
@@ -296,7 +431,9 @@ class DouyinDownloaderApp:
                     pass
         finally:
             self.is_running = False
-            self.btn_start.config(state="normal", text="开始下载")
+            self.root.after(
+                0, lambda: self.btn_start.config(state="normal", text="开始下载")
+            )
 
 
 if __name__ == "__main__":
