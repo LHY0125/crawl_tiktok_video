@@ -123,12 +123,18 @@ class DouyinDownloaderApp:
         frame_platform.pack(padx=10, pady=5, fill="x")
 
         rb_douyin = tk.Radiobutton(
-            frame_platform, text="抖音", variable=self.platform_var, value="douyin"
+            frame_platform,
+            text="抖音",
+            variable=self.platform_var,
+            value="douyin",
         )
         rb_douyin.pack(side="left", padx=10)
 
         rb_bilibili = tk.Radiobutton(
-            frame_platform, text="B站", variable=self.platform_var, value="bilibili"
+            frame_platform,
+            text="B站",
+            variable=self.platform_var,
+            value="bilibili",
         )
         rb_bilibili.pack(side="left", padx=10)
 
@@ -223,8 +229,8 @@ class DouyinDownloaderApp:
         thread = threading.Thread(
             target=self.run_task,
             args=(url, int(count_str), save_path, browser_path, platform),
+            daemon=True,
         )
-        thread.daemon = True
         thread.start()
 
     def run_task(self, target_url, target_count, save_root, browser_path, platform):

@@ -5,7 +5,15 @@ from datetime import datetime
 from DrissionPage import ChromiumPage, ChromiumOptions
 from src.downloader import download_file
 
-def run_douyin_task(target_url, target_count, save_root, browser_path, log_callback, finish_callback):
+
+def run_douyin_task(
+    target_url,
+    target_count,
+    save_root,
+    browser_path,
+    log_callback,
+    finish_callback,
+):
     """
     [Control Layer] 抖音核心业务流程
     1. 启动浏览器
@@ -53,7 +61,7 @@ def run_douyin_task(target_url, target_count, save_root, browser_path, log_callb
                                 ):
                                     collected_works.append(aweme)
                                     found_new = True
-                except:
+                except Exception:
                     pass
 
             log_callback(f"已获取作品信息: {len(collected_works)}/{target_count}")
@@ -99,7 +107,11 @@ def run_douyin_task(target_url, target_count, save_root, browser_path, log_callb
                 file_name_base = f"{date_str}({count_idx})"
 
             download_tasks.append(
-                {"work": work, "index": index, "file_name_base": file_name_base}
+                {
+                    "work": work,
+                    "index": index,
+                    "file_name_base": file_name_base,
+                }
             )
 
         # 使用线程池执行下载
@@ -115,7 +127,7 @@ def run_douyin_task(target_url, target_count, save_root, browser_path, log_callb
                         len(works_to_process),
                         save_root,
                         task["file_name_base"],
-                        log_callback
+                        log_callback,
                     )
                 )
 
@@ -133,12 +145,15 @@ def run_douyin_task(target_url, target_count, save_root, browser_path, log_callb
         if dp:
             try:
                 dp.close()
-            except:
+            except Exception:
                 pass
     finally:
         pass
 
-def process_douyin_work(work, index, total_count, save_root, file_name_base, log_callback):
+
+def process_douyin_work(
+    work, index, total_count, save_root, file_name_base, log_callback
+):
     """
     [Data Layer] 单个任务处理逻辑 (Worker)
     判断作品类型(视频/图文)，生成路径并调用下载器
@@ -148,9 +163,11 @@ def process_douyin_work(work, index, total_count, save_root, file_name_base, log
         if "images" in work and work["images"]:
             is_video = False
 
-        log_callback(
-            f"[{index + 1}/{total_count}] {file_name_base} | {'视频' if is_video else '图文'} | 下载中..."
+        msg = (
+            f"[{index + 1}/{total_count}] {file_name_base} | "
+            f"{'视频' if is_video else '图文'} | 下载中..."
         )
+        log_callback(msg)
 
         if is_video:
             video_url = work["video"]["play_addr"]["url_list"][0]
@@ -158,7 +175,7 @@ def process_douyin_work(work, index, total_count, save_root, file_name_base, log
             if not os.path.exists(file_path):
                 if download_file(video_url, file_path, log_callback=log_callback):
                     log_callback(
-                        f"[{index + 1}/{total_count}] {file_name_base} -> 下载完成"
+                        f"[{index + 1}/{total_count}] {file_name_base} " "-> 下载完成"
                     )
                 else:
                     log_callback(
@@ -166,7 +183,8 @@ def process_douyin_work(work, index, total_count, save_root, file_name_base, log
                     )
             else:
                 log_callback(
-                    f"[{index + 1}/{total_count}] {file_name_base} -> 文件已存在，跳过"
+                    f"[{index + 1}/{total_count}] {file_name_base} "
+                    "-> 文件已存在，跳过"
                 )
         else:
             img_folder = os.path.join(save_root, file_name_base)

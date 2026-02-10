@@ -5,13 +5,17 @@ import json
 import requests
 import concurrent.futures
 from datetime import datetime
-from tkinter import messagebox
 from DrissionPage import ChromiumPage, ChromiumOptions
 from src.downloader import download_file
 
 
 def run_bilibili_task(
-    target_url, target_count, save_root, browser_path, log_callback, finish_callback
+    target_url,
+    target_count,
+    save_root,
+    browser_path,
+    log_callback,
+    finish_callback=None,
 ):
     """
     [Control Layer] B站核心业务流程
@@ -85,7 +89,7 @@ def run_bilibili_task(
                         next_btn.click()
                         no_new_data_count = 0
                         time.sleep(2)
-                except:
+                except Exception:
                     pass
             else:
                 no_new_data_count = 0
@@ -146,7 +150,7 @@ def run_bilibili_task(
         if dp:
             try:
                 dp.close()
-            except:
+            except Exception:
                 pass
     finally:
         # 这里需要一种机制通知UI线程结束，或者由UI层处理
@@ -218,7 +222,11 @@ def get_bilibili_play_url(bvid):
     """
     url = f"https://www.bilibili.com/video/{bvid}"
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
         "Referer": "https://www.bilibili.com/",
     }
     try:
