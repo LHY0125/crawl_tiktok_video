@@ -1,5 +1,14 @@
 # 抖音/B站批量下载工具 (Video Downloader)
 
+<div align="center">
+
+[![Release](https://img.shields.io/github/v/release/LHY0125/crawl_tiktok_video.svg)](https://github.com/LHY0125/crawl_tiktok_video/releases)
+[![Stars](https://img.shields.io/github/stars/LHY0125/crawl_tiktok_video.svg)](https://github.com/LHY0125/crawl_tiktok_video)
+[![License](https://img.shields.io/github/license/LHY0125/crawl_tiktok_video.svg)](https://github.com/LHY0125/crawl_tiktok_video/blob/main/LICENSE)
+[![Build Status](https://github.com/LHY0125/crawl_tiktok_video/workflows/Build%20and%20Release/badge.svg)](https://github.com/LHY0125/crawl_tiktok_video/actions)
+
+</div>
+
 这是一个基于 Python 的抖音/B站视频批量下载工具，采用模块化设计，提供图形用户界面 (GUI)。它利用 `DrissionPage` 自动化控制 Edge 浏览器获取数据，支持多线程并发下载视频和图文内容。
 
 > **项目介绍视频**：[点击观看](https://www.douyin.com/user/self?modal_id=7602291788182721777&showTab=record)
